@@ -61,17 +61,15 @@ ggplot(data1, aes(x=Age, y=score, color = trial)) +
 ggplot(data1, aes(x=Gender, y=score, color = trial)) +
   geom_boxplot()+
   facet_wrap(~ Age, nrow = 5)
-ggplot(data1, aes(x=Gender, y=score)) +
-  geom_boxplot()+
-  facet_wrap(~ Age, nrow = 5)
+
 
 data1$Age <- factor(data1$Age);
-ggplot(data1, aes(x=Gender, y=score, color = trial)) +
-  geom_boxplot()+
-  facet_wrap(~ Age, nrow = 5)
+data1$Age <- as.numeric(data1$Age);
+
 ggplot(data1, aes(x=Age, y=score, color = trial)) +
   geom_boxplot()+
   facet_wrap(~ trial, nrow = 5)
+
 boxplot(score ~ Age*Gender,
         col=c("white","lightgray"), data1)
 boxplot(score ~ Age,
@@ -94,24 +92,95 @@ shapiro_test(data1, score)
 hist(data1$score)
 qqPlot(data1$score)#not normal
 
+ggqqplot(data1, "score", ggtheme = theme_bw()) +
+  facet_grid(score ~ Age, labeller = "label_both")
+
+#anova
+
+anova_g <- aov(score ~ Gender, data1)
+summary( anova_g )
+
+anova_g.residuals <- residuals (object = anova_g) # extract the residuals
+hist( x = anova_g.residuals )
+qqnorm( y = anova_g.residuals )
+shapiro.test( x = anova_g.residuals) #not normal
+
+kruskal.test(score ~ Gender, data = data1)#ns p-value = 0.3054
+leveneTest(y = data1$score, group = data1$Gender)#ok
+
+data1 %>%
+  pairwise_t_test(
+    score ~ Gender, paired = TRUE, 
+    p.adjust.method = "bonferroni"
+  )
+
+anova_a<- aov(score ~ Age, data1)
+summary( anova_a )
+
+anova_a.residuals <- residuals (object = anova_a) # extract the residuals
+hist( x = anova_a.residuals )
+qqnorm( y = anova_a.residuals )
+shapiro.test( x = anova_g.residuals) #not normal
+
+kruskal.test(score ~ Age, data = data1)#s p-value < 2.2e-16
+leveneTest(y = data1$score, group = data1$Age)#not equal
+
+oneway.test(score ~ Age, data = data1) #s p-value < 2.2e-16
 
 
+
+#data format
+data2 <- filter(data1, Age == 5 | Age == 6 | Age == 7 | Age == 8)
+data3 <- filter(data1, Age == 9 | Age == 10 | Age == 11 | Age == 12)
+data4 <- filter(data1, Age == 13 | Age == 14 | Age == 15)
+data5 <- filter(data1, Age == 16 | Age == 17 | Age == 18)
 #boxplots with p-values
-stat.test <- df %>%
-  group_by(dose) %>%
-  t_test(len ~ supp) %>%
+
+#pwc
+pwc <- data1 %>%
+  group_by(trial) %>%
+  pairwise_t_test(
+    score ~ Gender, paired = TRUE,
+    p.adjust.method = "bonferroni"
+  )
+pwc #gender by trial
+
+pwc2 <- data1 %>%
+  pairwise_t_test(
+    score ~ Gender, paired = TRUE,
+    p.adjust.method = "bonferroni"
+  )
+pwc2 #gender
+
+pwc1 <- data1 %>%
+  pairwise_t_test(
+    score ~ Age, paired = TRUE,
+    p.adjust.method = "bonferroni"
+  )
+pwc1 #age
+
+pwc3 <- data1 %>%
+  group_by(trial) %>%
+  pairwise_t_test(
+    score ~ Age, paired = TRUE,
+    p.adjust.method = "bonferroni"
+  )
+pwc3 #Age by trial
+
+#stat test
+stat.test0 <- data1 %>%
+  t_test(score ~ Age) %>%
   adjust_pvalue() %>%
   add_significance("p.adj")
-stat.test
+stat.test0
 
-stat.test <- stat.test %>% add_xy_position(x = "supp")
-bxp <- ggboxplot(df, x = "supp", y = "len", fill = "#00AFBB",
-                 facet.by = "dose")
-bxp + 
-  stat_pvalue_manual(stat.test, label = "p.adj", hide.ns = TRUE) +
+stat.test0 <- stat.test0 %>% add_xy_position(x = "Age")
+bxp_1 <- ggboxplot(data1, x = "Age", y = "score", fill = "#00AFBB")
+bxp_1 + 
+  stat_pvalue_manual(stat.test0, label = "p.adj", hide.ns = TRUE) +
   scale_y_continuous(expand = expansion(mult = c(0.05, 0.10)))
 
-
+#Model
 model5 = lmer(score ~ Age*trial + (1+trial|Age)+(1+trial|ID), data=data1, REML=FALSE)
 
 qqnorm(resid(model5))
@@ -119,8 +188,6 @@ qqline(resid(model5))
 
 hist(log(residuals(model5)))
 hist(residuals(model5))
-
-
 
 effects_mod <- effect(term= "Age*trial", mod= model5)
 summary(effects_mod) #output of what the values are
